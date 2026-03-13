@@ -2,9 +2,7 @@
 “What have you done?” – A collection of Bash scripts born from repeatedly asking my BIOS/UEFI vendors why some setting changed again after a firmware update.
 
 ## The Story behind
-I tinker with my PC. That includes changing BIOS settings. Even after a lot of changes over the past two decades, most vendors ignore certain settings during an update.  
-That caused me much headache because they don't tell what settings changed. They revert to some kind of default – but not always.  
-Applying a saved profile from a previous version can cause even more problems, so I simply check my settings and note what I need to change in the BIOS.
+I tinker with my PC. That includes changing BIOS settings. Even after a lot of changes over the past two decades, most vendors ignore certain settings during an update. That caused me much headache because they don't tell what settings changed. They revert to some kind of default – but not always. Applying a saved profile from a previous version can cause even more problems, so I simply check my settings and note what I need to change in the BIOS.
 
 These scripts gather exactly that information: GPU power states, CPU power profiles, VA‑API support, RAM speed, and more – all the things that tend to get reset after a firmware update.
 
@@ -54,20 +52,21 @@ sudo usermod -aG render,video $USER
 ```
 
 ### Sudoers exceptions for specific commands
-Passwordless sudo configured for two specific commands via `/etc/sudoers.d/`:
+Passwordless sudo configured for two specific commands via `/etc/sudoers.d/`
 ```bash
 sudo visudo -f /etc/sudoers.d/whyd-check`
 ```
-Replace 'yourusername' with your actuall username. $USER is not working there for security reasons!
+Replace `yourusername` with your actuall username. $USER is not working there for security reasons!
 
 `yourusername ALL=(ALL) NOPASSWD: /usr/sbin/dmidecode -t memory`
+
 `yourusername ALL=(ALL) NOPASSWD: /usr/bin/lspci -s * -vv`
 
 Without this, those two checks degrade gracefully with an explanation.
 
 ### Installation
-Place the wrapper in `$HOME/.config/autostart/`
-Place the checker in `$HOME/.local/bin/`
+* Place the wrapper in `$HOME/.config/autostart/`
+* Place the checker in `$HOME/.local/bin/`
 
 ## Troubleshooting
 If you encounter issues, please [open an issue](https://github.com/Naltarunir/whyd-scripts/issues) with details about your system and the problem.
