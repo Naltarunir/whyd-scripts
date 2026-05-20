@@ -30,32 +30,45 @@
 set -u
 
 # ────────────────────────────────────────────────────────────────
-# COLOURS — disabled automatically when not a TTY or TERM=dumb
+# COLOURS — disabled automatically when not a TTY, TERM=dumb,
+#           or NO_COLOR is set (https://no-color.dev)
+# Only used for signaling: GREEN=ok, YELLOW=warn, RED=fail
 # ────────────────────────────────────────────────────────────────
-if [[ -t 1 && "${TERM:-}" != "dumb" ]]; then
+if [[ -t 1 && "${TERM:-}" != "dumb" && -z "${NO_COLOR:-}" ]]; then
     GREEN='\033[0;32m'
     YELLOW='\033[1;33m'
     RED='\033[0;31m'
-    CYAN='\033[0;36m'
-    ORANGE='\033[38;5;208m'
     BOLD='\033[1m'
     RESET='\033[0m'
 else
-    GREEN='' YELLOW='' RED='' CYAN='' ORANGE='' BOLD='' RESET=''
+    GREEN='' YELLOW='' RED='' BOLD='' RESET=''
+fi
+
+# ────────────────────────────────────────────────────────────────
+# DISTRO DETECTION — for package install hints
+# ────────────────────────────────────────────────────────────────
+_PKG_INSTALL="your package manager"
+if [[ -f /etc/os-release ]]; then
+    # shellcheck source=/dev/null
+    . /etc/os-release
+    case "${ID_LIKE:-${ID:-}}" in
+        *arch*)             _PKG_INSTALL="pacman -S" ;;
+        *debian*|*ubuntu*)  _PKG_INSTALL="apt install" ;;
+        *fedora*|*rhel*)    _PKG_INSTALL="dnf install" ;;
+        *opensuse*)         _PKG_INSTALL="zypper install" ;;
+    esac
 fi
 
 # ────────────────────────────────────────────────────────────────
 # HELPERS
 # ────────────────────────────────────────────────────────────────
 
-# Direct print helpers (used in --check)
 ok()   { echo -e "${GREEN}│ ✓ ${*}${RESET}"; }
 warn() { echo -e "${YELLOW}│ ⚠ ${*}${RESET}"; }
 fail() { echo -e "${RED}│ ✗ ${*}${RESET}"; }
-info() { echo -e "${ORANGE}│ ${*}${RESET}"; }
-sect() { echo -e "${CYAN}${*}${RESET}"; }
+info() { echo    "│ ${*}"; }
+sect() { echo -e "${BOLD}${*}${RESET}"; }
 
-# Verdict collector — stores type:message, flushed at end of each section
 VERDICTS=()
 
 verdict_ok()   { VERDICTS+=("ok:${*}"); }
@@ -64,7 +77,7 @@ verdict_fail() { VERDICTS+=("fail:${*}"); }
 
 flush_verdicts() {
     if [[ ${#VERDICTS[@]} -gt 0 ]]; then
-        echo -e "${CYAN}│ ──────────────────────────────────────────────────────────────${RESET}"
+        echo "│ ──────────────────────────────────────────────────────────────"
         for v in "${VERDICTS[@]}"; do
             local type="${v%%:*}"
             local msg="${v#*:}"
@@ -133,11 +146,11 @@ show_check() {
             ok "sudoers: dmidecode entry OK"
         else
             fail "sudoers: dmidecode entry MISSING or WRONG PATH"
-            info "  Add to /etc/sudoers.d/system-status:"
-            info "  $USER ALL=(ALL) NOPASSWD: $DMIDECODE -t memory"
+            info "  Add to /etc/sudoers.d/system-status (replace youruser with your username):"
+            info "  youruser ALL=(ALL) NOPASSWD: $DMIDECODE -t memory"
         fi
     else
-        fail "dmidecode: not installed (pacman -S dmidecode)"
+        fail "dmidecode: not installed ($_PKG_INSTALL dmidecode)"
     fi
 
     LSPCI=$(command -v lspci 2>/dev/null)
@@ -148,32 +161,32 @@ show_check() {
             ok "sudoers: lspci entry OK"
         else
             fail "sudoers: lspci entry MISSING or WRONG PATH"
-            info "  Add to /etc/sudoers.d/system-status:"
-            info "  $USER ALL=(ALL) NOPASSWD: $LSPCI -s * -vv"
+            info "  Add to /etc/sudoers.d/system-status (replace youruser with your username):"
+            info "  youruser ALL=(ALL) NOPASSWD: $LSPCI -s * -vv"
         fi
     else
-        fail "lspci: not installed (pacman -S pciutils)"
+        fail "lspci: not installed ($_PKG_INSTALL pciutils)"
     fi
 
     if command -v glxinfo >/dev/null 2>&1; then
         ok "glxinfo found (Mesa info available)"
     else
         warn "glxinfo: not installed — Mesa info unavailable"
-        info "  Install: pacman -S mesa-utils"
+        info "  Install: $_PKG_INSTALL mesa-utils"
     fi
 
     if command -v vulkaninfo >/dev/null 2>&1; then
         ok "vulkaninfo found (Vulkan info available)"
     else
         warn "vulkaninfo: not installed — Vulkan info unavailable"
-        info "  Install: pacman -S vulkan-tools"
+        info "  Install: $_PKG_INSTALL vulkan-tools"
     fi
 
     if command -v efibootmgr >/dev/null 2>&1; then
         ok "efibootmgr found (boot order available in --full)"
     else
         warn "efibootmgr: not installed — boot order unavailable in --full"
-        info "  Install: pacman -S efibootmgr"
+        info "  Install: $_PKG_INSTALL efibootmgr"
     fi
 
     if ! sudo -n "${DMIDECODE:-dmidecode}" -t memory >/dev/null 2>&1 || \
@@ -210,15 +223,15 @@ esac
 
 echo ""
 if [[ "$FULL_MODE" == true ]]; then
-    echo -e "${BOLD}${CYAN}╔════════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${BOLD}${CYAN}║     SYSTEM STATUS CHECK - BIOS Settings ok? [FULL MODE]        ║${RESET}"
-    echo -e "${BOLD}${CYAN}║     Verifying hardware settings after BIOS update              ║${RESET}"
-    echo -e "${BOLD}${CYAN}╚════════════════════════════════════════════════════════════════╝${RESET}"
+    echo -e "${BOLD}╔════════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${BOLD}║     SYSTEM STATUS CHECK - BIOS Settings ok? [FULL MODE]        ║${RESET}"
+    echo -e "${BOLD}║     Verifying hardware settings after BIOS update              ║${RESET}"
+    echo -e "${BOLD}╚════════════════════════════════════════════════════════════════╝${RESET}"
 else
-    echo -e "${BOLD}${CYAN}╔════════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${BOLD}${CYAN}║        SYSTEM STATUS CHECK - BIOS Settings ok?                 ║${RESET}"
-    echo -e "${BOLD}${CYAN}║        Verifying hardware settings after BIOS update           ║${RESET}"
-    echo -e "${BOLD}${CYAN}╚════════════════════════════════════════════════════════════════╝${RESET}"
+    echo -e "${BOLD}╔════════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${BOLD}║        SYSTEM STATUS CHECK - BIOS Settings ok?                 ║${RESET}"
+    echo -e "${BOLD}║        Verifying hardware settings after BIOS update           ║${RESET}"
+    echo -e "${BOLD}╚════════════════════════════════════════════════════════════════╝${RESET}"
 fi
 echo ""
 
@@ -228,7 +241,6 @@ echo ""
 sect "┌─ CPU ─────────────────────────────────────────────────────────┘" 
 VERDICTS=()
 
-# Data
 CPU_MODEL=$(awk -F: '/model name/ {print $2; exit}' /proc/cpuinfo | xargs)
 info "Model: $CPU_MODEL"
 
@@ -263,7 +275,6 @@ THREADS_PER_CORE=$(lscpu 2>/dev/null | awk '/Thread\(s\) per core/ {print $NF}')
 THREADS_PER_CORE=${THREADS_PER_CORE:-1}
 PHYSICAL_CORES=$((LOGICAL_CORES / THREADS_PER_CORE))
 
-# --full data
 if [[ "$FULL_MODE" == true ]]; then
     RAPL_PATH="/sys/class/powercap/intel-rapl/intel-rapl:0"
     if [[ -d "$RAPL_PATH" ]]; then
@@ -277,10 +288,9 @@ if [[ "$FULL_MODE" == true ]]; then
     fi
 fi
 
-# Verdicts
 if command -v checkupdates >/dev/null 2>&1; then
     if checkupdates 2>/dev/null | grep -qE "intel-ucode|amd-ucode"; then
-        verdict_warn "Microcode package update available (run: pacman -Syu)"
+        verdict_warn "Microcode package update available — update your system"
     else
         verdict_ok "Microcode package up to date"
     fi
@@ -354,7 +364,6 @@ if [[ -n "$DMIDECODE" ]] && sudo -n "$DMIDECODE" -t memory >/dev/null 2>&1; then
         [[ -n "$ECC" ]] && info "ECC: $ECC"
     fi
 
-    # Verdict
     RAM_SPEED=$(awk -F: '/^\s*Speed:/ && /[0-9]/ && !/Unknown/ {
         gsub(/^\s+|\s+$/, "", $2); print $2; exit}' <<< "$DMIDECODE_MEM")
     if [[ -n "$RAM_SPEED" ]]; then
@@ -490,7 +499,7 @@ elif [[ -n "${GPU_PCI:-}" ]]; then
             if [[ "$BAR_SIZE" == *"G"* ]]; then
                 verdict_ok "Resizable BAR: ENABLED ($BAR_SIZE)"
             else
-                verdict_fail "Resizable BAR: DISABLED ($BAR_SIZE) — enable in BIOS for +10-15% GPU perf"
+                verdict_fail "Resizable BAR: DISABLED ($BAR_SIZE) — enable in BIOS"
             fi
         fi
     fi
@@ -518,7 +527,6 @@ if [[ "$FULL_MODE" == true ]]; then
         verdict_ok "Above 4G Decoding: Active ($AB4G 64-bit prefetchable regions)"
     else
         info "Above 4G Decoding: No 64-bit prefetchable BARs detected"
-        info "  → Required for Resizable BAR on discrete GPU"
     fi
 fi
 
@@ -568,26 +576,25 @@ if [[ "$FULL_MODE" == true ]]; then
         info "Boot Current: ${BOOT_CURRENT:-Unknown}"
         info "Boot Order:"
         efibootmgr 2>/dev/null | awk \
-            -v g="${GREEN}" -v r="${RED}" -v rs="${RESET}" -v o="${ORANGE}" \
+            -v g="${GREEN}" -v r="${RED}" -v rs="${RESET}" \
             '/Boot[0-9A-F]{4}/ && !/BootCurrent|BootOrder|BootNext/ {
                 active = /\*/ ? g "✓" rs : r "✗" rs
                 sub(/Boot[0-9A-F]{4}[* ]+/, "")
-                printf o "│   " rs "%s %s\n", active, $0
+                printf "│   %s %s\n", active, $0
             }' | head -6
     else
-        info "Boot Order: efibootmgr not installed (pacman -S efibootmgr)"
+        info "Boot Order: efibootmgr not installed ($_PKG_INSTALL efibootmgr)"
     fi
 
     TB_DEVICES=$(ls /sys/bus/thunderbolt/devices/ 2>/dev/null | wc -l)
     if [[ "$TB_DEVICES" -gt 0 ]]; then
         TB_SECURITY=$(cat /sys/bus/thunderbolt/devices/domain0/security 2>/dev/null | xargs)
-        info "Thunderbolt/USB4: Present (security: ${TB_SECURITY:-unknown}, devices: $TB_DEVICES)"
+        info "Thunderbolt: Present (security: ${TB_SECURITY:-unknown}, devices: $TB_DEVICES)"
     else
-        info "Thunderbolt/USB4: Not detected or disabled in BIOS"
+        info "Thunderbolt: Not detected or disabled in BIOS"
     fi
 fi
 
-# Verdicts
 if [[ -d /sys/firmware/efi ]]; then
     verdict_ok "Boot Mode: UEFI"
     SB_VAR=$(find /sys/firmware/efi/efivars -name "SecureBoot-*" 2>/dev/null | head -1)
